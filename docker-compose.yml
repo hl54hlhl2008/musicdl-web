@@ -1,0 +1,11 @@
+services:
+  musicdl-web:
+    build: .
+    container_name: musicdl-web
+    ports:
+      - "58092:8080"
+    volumes:
+      - /volume2/downloads2/music:/downloads
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped

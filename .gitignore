@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+downloads/
+musicdl_outputs/
+*.lrc
+*.mp3
+*.flac
+*.m4a
+*.wav
+.env
