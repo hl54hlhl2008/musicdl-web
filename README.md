@@ -4,11 +4,14 @@
 
 ## 功能
 
-- **多音源搜索**：网易云、QQ音乐、咪咕，关键词搜索歌名或歌手
-- **链接解析下载**：
-  - 网易云歌手页 / 专辑页 / 歌单页
-  - QQ音乐歌单页
-  - 咪咕专辑页 / 歌手页
+- **五音源搜索**：网易云、QQ音乐、酷狗、酷我、咪咕，关键词搜索歌名或歌手
+- **链接解析下载**（五平台歌单/歌手/专辑页）：
+  - 网易云：歌手页 / 专辑页 / 歌单页
+  - QQ音乐：歌单页
+  - 酷狗：歌单页 / 歌手页 / 专辑页
+  - 酷我：歌单页 / 歌手页 / 专辑页
+  - 咪咕：专辑页 / 歌手页
+- **自动音源识别**：粘贴链接解析时自动勾选对应平台音源，取消其他平台
 - **智能目录**：解析歌手/专辑/歌单链接后，自动在下载目录下创建同名文件夹
 - **歌词同步**：每首歌自动保存同名 `.lrc` 歌词文件
 - **文件名规范**：`歌曲名 - 歌手名.扩展名`
@@ -44,14 +47,20 @@ services:
 
 ## 支持的链接格式
 
-| 平台 | 链接示例 |
-|------|---------|
-| 网易云歌手 | `https://music.163.com/#/artist?id=46487` |
-| 网易云歌单 | `https://music.163.com/#/playlist?id=46243538` |
-| 网易云专辑 | `https://music.163.com/#/album?id=xxxxx` |
-| QQ音乐歌单 | `https://y.qq.com/n/ryqq_v2/playlist/7693795600` |
-| 咪咕专辑 | `https://music.migu.cn/v5/#/albumDetail?albumId=1142829638` |
-| 咪咕歌手 | `https://music.migu.cn/v5/#/singerDetail?id=259` |
+| 平台 | 类型 | 链接示例 |
+|------|------|---------|
+| 网易云 | 歌手 | `https://music.163.com/#/artist?id=46487` |
+| 网易云 | 歌单 | `https://music.163.com/#/playlist?id=46243538` |
+| 网易云 | 专辑 | `https://music.163.com/#/album?id=xxxxx` |
+| QQ音乐 | 歌单 | `https://y.qq.com/n/ryqq_v2/playlist/7693795600` |
+| 酷狗 | 歌单 | `https://www.kugou.com/yy/special/single/12345.html` |
+| 酷狗 | 歌手 | `https://www.kugou.com/singer/12345` |
+| 酷狗 | 专辑 | `https://www.kugou.com/album/12345.html` |
+| 酷我 | 歌单 | `https://www.kuwo.cn/playlist_detail/1289073215` |
+| 酷我 | 歌手 | `https://www.kuwo.cn/singer_detail/12345` |
+| 酷我 | 专辑 | `https://www.kuwo.cn/album_detail/12345` |
+| 咪咕 | 专辑 | `https://music.migu.cn/v5/#/albumDetail?albumId=1142829638` |
+| 咪咕 | 歌手 | `https://music.migu.cn/v5/#/singerDetail?id=259` |
 
 ## 使用说明
 
@@ -62,7 +71,7 @@ services:
 
 ### 链接批量下载
 1. 在「专辑/歌手/歌单链接」标签页粘贴链接
-2. 点击「解析」，系统自动获取该歌手/专辑/歌单的全部歌曲
+2. 点击「解析」，系统自动识别平台并勾选对应音源，同时获取全部歌曲列表
 3. 勾选歌曲后下载，文件自动存入对应名称的文件夹
 
 ### 下载目录结构
