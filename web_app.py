@@ -16,7 +16,7 @@ _song_cache = {}
 
 def build_client(sources=None):
     if sources is None:
-        sources = ['NeteaseMusicClient', 'QQMusicClient', 'MiguMusicClient']
+        sources = ['NeteaseMusicClient', 'QQMusicClient', 'KugouMusicClient', 'KuwoMusicClient', 'MiguMusicClient']
     cfg = {s: {"search_size_per_source": 20, "search_size_per_page": 20, "strict_limit_search_size_per_page": False} for s in sources}
     return MusicDL.MusicClient(music_sources=sources, init_music_clients_cfg=cfg)
 
@@ -153,6 +153,24 @@ def api_link():
         # QQ音乐歌单
         m = re.search(r'y\.qq\.com/n/ryqq[^/]*/playlist/(\d+)', url)
         if m: return parse_qq_playlist(m.group(1))
+        # 酷我歌单
+        m = re.search(r'kuwo\.cn/playlist_detail/(\d+)', url)
+        if m: return parse_kuwo_playlist(m.group(1))
+        # 酷我歌手
+        m = re.search(r'kuwo\.cn/singer_detail/(\d+)', url)
+        if m: return parse_kuwo_singer(m.group(1))
+        # 酷我专辑
+        m = re.search(r'kuwo\.cn/album_detail/(\d+)', url)
+        if m: return parse_kuwo_album(m.group(1))
+        # 酷狗歌单
+        m = re.search(r'kugou\.com/yy/special/single/(\d+)', url)
+        if m: return parse_kugou_playlist(m.group(1))
+        # 酷狗歌手
+        m = re.search(r'kugou\.com/singer/(\d+)', url)
+        if m: return parse_kugou_singer(m.group(1))
+        # 酷狗专辑
+        m = re.search(r'kugou\.com/album/(\d+)', url)
+        if m: return parse_kugou_album(m.group(1))
         # 咪咕专辑
         m = re.search(r'albumId=(\d+)', url)
         if m: return parse_migu_album(m.group(1))
@@ -260,6 +278,173 @@ def parse_qq_playlist(playlist_id):
     return jsonify({'songs': songs_out, 'keys': keys, 'folder': playlist_name})
 
 
+def parse_kuwo_playlist(pid):
+    """解析酷我歌单：快速返回歌曲列表，下载时用rid解析"""
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)"}
+    all_tracks, page, total = [], 1, 0
+    while True:
+        r = requests.get(f"https://m.kuwo.cn/newh5app/wapi/api/www/playlist/playListInfo?pid={pid}&pn={page}&rn=100", headers=headers, timeout=15)
+        d = r.json()
+        if d.get('code') not in (0, 200): break
+        data = d.get('data', {})
+        if page == 1:
+            playlist_name = data.get('name', f'playlist-{pid}')
+            total = int(data.get('total', 0))
+        tracks = data.get('musicList', [])
+        if not tracks: break
+        all_tracks.extend(tracks)
+        if len(all_tracks) >= total or len(tracks) < 100: break
+        page += 1
+
+    songs_out, keys = [], []
+    for t in all_tracks:
+        rid = t.get('rid', 0)
+        if not rid: continue
+        name = t.get('name', '')
+        artist = t.get('artist', '')
+        key = f"kuwo_pid_{rid}"
+        _song_cache[key] = {'rid': rid, 'pending': True, 'source': 'KuwoMusicClient'}
+        songs_out.append({'song_name': name, 'singers': artist})
+        keys.append(key)
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': playlist_name})
+
+
+def parse_kuwo_singer(singer_id):
+    """解析酷我歌手：获取歌手名后搜索"""
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)"}
+    try:
+        r = requests.get(f"https://m.kuwo.cn/newh5app/wapi/api/www/artist/info?artistid={singer_id}", headers=headers, timeout=10)
+        singer_name = r.json().get('data', {}).get('name', f'artist-{singer_id}')
+    except:
+        singer_name = f'artist-{singer_id}'
+    kw = build_client(['KuwoMusicClient']).music_clients['KuwoMusicClient']
+    results = kw.search(keyword=singer_name)
+    songs_out, keys, seen = [], [], set()
+    for si in results:
+        nid = getattr(si, 'identifier', '')
+        if nid in seen: continue
+        seen.add(nid)
+        key = f"kuwo_{nid}"
+        _song_cache[key] = si
+        songs_out.append({'song_name': si.song_name, 'singers': si.singers})
+        keys.append(key)
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': singer_name})
+
+
+def parse_kuwo_album(album_id):
+    """解析酷我专辑：获取专辑名后搜索"""
+    headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)"}
+    try:
+        r = requests.get(f"https://m.kuwo.cn/newh5app/wapi/api/www/album/info?albumid={album_id}", headers=headers, timeout=10)
+        album_name = r.json().get('data', {}).get('album', {}).get('name', f'album-{album_id}')
+    except:
+        album_name = f'album-{album_id}'
+    kw = build_client(['KuwoMusicClient']).music_clients['KuwoMusicClient']
+    results = kw.search(keyword=album_name)
+    songs_out, keys, seen = [], [], set()
+    for si in results:
+        nid = getattr(si, 'identifier', '')
+        if nid in seen: continue
+        seen.add(nid)
+        key = f"kuwo_{nid}"
+        _song_cache[key] = si
+        songs_out.append({'song_name': si.song_name, 'singers': si.singers})
+        keys.append(key)
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': album_name})
+
+
+def parse_kugou_playlist(special_id):
+    """解析酷狗歌单：快速返回歌曲列表，下载时用hash解析"""
+    import hashlib, time as _time
+    headers = {
+        'User-Agent': 'Android9-AndroidPhone-11239-18-0-playlist-wifi',
+        'Host': 'gatewayretry.kugou.com',
+        'x-router': 'pubsongscdn.kugou.com',
+        'mid': '239526275778893399526700786998289824956',
+        'dfid': '-',
+        'clienttime': str(int(_time.time()))
+    }
+    all_tracks, page, total = [], 1, 0
+    while True:
+        api_url = f"http://gatewayretry.kugou.com/v2/get_other_list_file?specialid={special_id}&need_sort=1&module=CloudMusic&clientver=11239&pagesize=300&specalidpgc={special_id}&userid=0&page={page}&type=0&area_code=1&appid=1005"
+        query = api_url.split("?", 1)[1]
+        sorted_query = "&".join(sorted(query.split("&")))
+        raw = "OIlwieks28dk2k092lksi2UIkp" + sorted_query + "OIlwieks28dk2k092lksi2UIkp"
+        signature = hashlib.md5(raw.encode()).hexdigest()
+        try:
+            r = requests.get(api_url + '&signature=' + signature, headers=headers, timeout=15)
+            d = r.json()
+        except:
+            break
+        info = d.get('data', {}).get('info', [])
+        if not info: break
+        if page == 1:
+            total = int(d.get('data', {}).get('count', 0) or len(info))
+        all_tracks.extend(info)
+        if len(all_tracks) >= total or len(info) < 300: break
+        page += 1
+
+    playlist_name = f"playlist-{special_id}"
+    songs_out, keys, seen = [], [], set()
+    for t in all_tracks:
+        h = t.get('hash', '')
+        if not h or h in seen: continue
+        seen.add(h)
+        name = t.get('songname', '')
+        singer = t.get('singerName', '')
+        key = f"kugou_pid_{h}"
+        _song_cache[key] = {'file_hash': h, 'pending': True, 'source': 'KugouMusicClient'}
+        songs_out.append({'song_name': name, 'singers': singer})
+        keys.append(key)
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': playlist_name})
+
+
+def parse_kugou_singer(singer_id):
+    """解析酷狗歌手：获取歌手名后搜索"""
+    try:
+        r = requests.get(f"https://www.kugou.com/yy/singer/home/{singer_id}.html",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        m = re.search(r'<title>([^-<]+)-', r.text)
+        singer_name = m.group(1).strip() if m else f'artist-{singer_id}'
+    except:
+        singer_name = f'artist-{singer_id}'
+    kg = build_client(['KugouMusicClient']).music_clients['KugouMusicClient']
+    results = kg.search(keyword=singer_name)
+    songs_out, keys, seen = [], [], set()
+    for si in results:
+        nid = getattr(si, 'identifier', '')
+        if nid in seen: continue
+        seen.add(nid)
+        key = f"kugou_{nid}"
+        _song_cache[key] = si
+        songs_out.append({'song_name': si.song_name, 'singers': si.singers})
+        keys.append(key)
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': singer_name})
+
+
+def parse_kugou_album(album_id):
+    """解析酷狗专辑：获取专辑名后搜索"""
+    try:
+        r = requests.get(f"https://www.kugou.com/yy/album/single/{album_id}.html",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        m = re.search(r'<title>([^-<]+)-', r.text)
+        album_name = m.group(1).strip() if m else f'album-{album_id}'
+    except:
+        album_name = f'album-{album_id}'
+    kg = build_client(['KugouMusicClient']).music_clients['KugouMusicClient']
+    results = kg.search(keyword=album_name)
+    songs_out, keys, seen = [], [], set()
+    for si in results:
+        nid = getattr(si, 'identifier', '')
+        if nid in seen: continue
+        seen.add(nid)
+        key = f"kugou_{nid}"
+        _song_cache[key] = si
+        songs_out.append({'song_name': si.song_name, 'singers': si.singers})
+        keys.append(key)
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': album_name})
+
+
 def parse_migu_album(album_id):
     """解析咪咕专辑"""
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -364,6 +549,20 @@ def api_download():
                     elif 'songmid' in cached:
                         # QQ音乐：用songmid解析
                         si = src_client._parsewiththirdpartapis(search_result={'songmid': cached['songmid']})
+                        if si.with_valid_download_url:
+                            cached = si
+                        else:
+                            failed += 1; continue
+                    elif 'file_hash' in cached:
+                        # 酷狗：用hash解析
+                        si = src_client._parsewiththirdpartapis(search_result={'hash': cached['file_hash']})
+                        if si.with_valid_download_url:
+                            cached = si
+                        else:
+                            failed += 1; continue
+                    elif 'rid' in cached:
+                        # 酷我：用rid解析
+                        si = src_client._parsewiththirdpartapis(search_result={'rid': cached['rid'], 'musicrid': f"MUSIC_{cached['rid']}"})
                         if si.with_valid_download_url:
                             cached = si
                         else:
