@@ -75,11 +75,11 @@ h1 { color: #333; margin-bottom: 16px; font-size: 22px; }
   <div class="card">
     <b>音源</b>
     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;font-size:13px">
-      <label><input type="checkbox" checked> 网易云</label>
-      <label><input type="checkbox" checked> QQ音乐</label>
-      <label><input type="checkbox"> 酷狗</label>
-      <label><input type="checkbox"> 酷我</label>
-      <label><input type="checkbox" checked> 咪咕</label>
+      <label><input type="checkbox" id="src_netease" checked> 网易云</label>
+      <label><input type="checkbox" id="src_qq" checked> QQ音乐</label>
+      <label><input type="checkbox" id="src_kugou"> 酷狗</label>
+      <label><input type="checkbox" id="src_kuwo"> 酷我</label>
+      <label><input type="checkbox" id="src_migu" checked> 咪咕</label>
     </div>
     <div class="folder-info">保存目录: /volume2/downloads2/music<span id="folder_label"></span></div>
   </div>
@@ -98,7 +98,17 @@ let songs = [], currentFolder = '', songKeys = [];
 function switchTab(t){document.getElementById('tab-btn-search').classList.toggle('active',t==='search');document.getElementById('tab-btn-album').classList.toggle('active',t==='album');document.getElementById('tab-search').style.display=t==='search'?'block':'none';document.getElementById('tab-album').style.display=t==='album'?'block':'none';}
 function log(m){document.getElementById('status').innerHTML=m+'<br>'+document.getElementById('status').innerHTML;}
 function doSearch(){const kw=document.getElementById('search_kw').value.trim();if(!kw)return;currentFolder='';document.getElementById('folder_label').textContent='';log('搜索: '+kw);fetch('/api/search?kw='+encodeURIComponent(kw)).then(r=>r.json()).then(d=>{songs=d.songs||[];songKeys=d.keys||[];render();log('找到 '+songs.length+' 首');});}
-function doLink(){const url=document.getElementById('link_url').value.trim();if(!url)return;log('解析链接中...');fetch('/api/link?url='+encodeURIComponent(url)).then(r=>r.json()).then(d=>{songs=d.songs||[];songKeys=d.keys||[];currentFolder=d.folder||'';document.getElementById('folder_label').textContent=currentFolder?' → '+currentFolder:'';render();log('找到 '+songs.length+' 首'+(currentFolder?'，保存到: '+currentFolder:''));});}
+function doLink(){const url=document.getElementById('link_url').value.trim();if(!url)return;
+  // 根据URL自动勾选对应音源
+  const all=['src_netease','src_qq','src_kugou','src_kuwo','src_migu'];
+  let active='';
+  if(url.includes('163.com')) active='src_netease';
+  else if(url.includes('y.qq.com')) active='src_qq';
+  else if(url.includes('kugou.com')) active='src_kugou';
+  else if(url.includes('kuwo.cn')) active='src_kuwo';
+  else if(url.includes('migu.cn')) active='src_migu';
+  all.forEach(id=>{document.getElementById(id).checked=(id===active);});
+  log('解析链接中...');fetch('/api/link?url='+encodeURIComponent(url)).then(r=>r.json()).then(d=>{songs=d.songs||[];songKeys=d.keys||[];currentFolder=d.folder||'';document.getElementById('folder_label').textContent=currentFolder?' → '+currentFolder:'';render();log('找到 '+songs.length+' 首'+(currentFolder?'，保存到: '+currentFolder:''));});}
 function render(){const el=document.getElementById('songList');if(!songs.length){el.innerHTML='<p class="empty">无结果</p>';return;}el.innerHTML=songs.map((s,i)=>`<div class="song-item"><input type="checkbox" id="ck${i}"><span class="song-name">${s.song_name||''}</span><span class="song-artist">${s.singers||''}</span></div>`).join('');}
 function selectAll(v){songs.forEach((_,i)=>document.getElementById('ck'+i).checked=v);}
 function doDownload(){const selIdx=songs.map((_,i)=>i).filter(i=>document.getElementById('ck'+i).checked);if(!selIdx.length){alert('请先勾选歌曲');return;}const selKeys=selIdx.map(i=>songKeys[i]).filter(k=>k);log('开始下载 '+selKeys.length+' 首...'+(currentFolder?' → '+currentFolder:''));fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys:selKeys,folder:currentFolder})}).then(r=>r.json()).then(d=>log(d.msg||'完成'));}
