@@ -163,6 +163,9 @@ def api_link():
         # QQ音乐歌单
         m = re.search(r'y\.qq\.com/n/ryqq[^/]*/playlist/(\d+)', url)
         if m: return parse_qq_playlist(m.group(1))
+        # QQ音乐专辑
+        m = re.search(r'y\.qq\.com/n/ryqq[^/]*/albumDetail/([A-Za-z0-9]+)', url)
+        if m: return parse_qq_album(m.group(1))
         # 酷我歌单
         m = re.search(r'kuwo\.cn/playlist_detail/(\d+)', url)
         if m: return parse_kuwo_playlist(m.group(1))
@@ -281,6 +284,46 @@ def parse_qq_playlist(playlist_id):
         name = track.get("songname", "")
         singers = " ".join([s.get("name", "") for s in track.get("singer", [])])
         key = f"qq_pid_{songmid}"
+        _song_cache[key] = {'songmid': songmid, 'pending': True, 'source': 'QQMusicClient'}
+        songs_out.append({'song_name': name, 'singers': singers})
+        keys.append(key)
+
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': playlist_name})
+
+
+def parse_qq_album(albummid):
+    """解析QQ音乐专辑：快速返回歌曲列表，下载时用songmid解析"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://y.qq.com/",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "comm": {"format": "json", "ct": 24, "cv": 0},
+        "albumSongList": {
+            "module": "music.musichallAlbum.AlbumSongList",
+            "method": "GetAlbumSongList",
+            "param": {"albummid": albummid, "begin": 0, "num": 100}
+        }
+    }
+    r = requests.post("https://u.y.qq.com/cgi-bin/musicu.fcg", json=data, headers=headers, timeout=15)
+    d = r.json()
+    songlist = d.get('albumSongList', {}).get('data', {}).get('songList', [])
+    if not songlist:
+        return jsonify({'songs': [], 'keys': [], 'error': '专辑为空'})
+
+    playlist_name = albummid
+    songs_out, keys, seen = [], [], set()
+    for item in songlist:
+        si = item.get('songInfo', {})
+        songmid = si.get('mid', '')
+        if not songmid or songmid in seen: continue
+        seen.add(songmid)
+        name = si.get('name', '')
+        singers = " ".join([s.get('name', '') for s in si.get('singer', [])])
+        if playlist_name == albummid:
+            playlist_name = si.get('album', {}).get('name', f'album-{albummid}')
+        key = f"qq_album_{songmid}"
         _song_cache[key] = {'songmid': songmid, 'pending': True, 'source': 'QQMusicClient'}
         songs_out.append({'song_name': name, 'singers': singers})
         keys.append(key)

@@ -7,7 +7,7 @@
 - **五音源搜索**：网易云、QQ音乐、酷狗、酷我、咪咕，关键词搜索歌名或歌手
 - **链接解析下载**（五平台歌单/歌手/专辑页）：
   - 网易云：歌手页 / 专辑页 / 歌单页
-  - QQ音乐：歌单页
+  - QQ音乐：歌单页 / 专辑页
   - 酷狗：歌单页 / 歌手页 / 专辑页
   - 酷我：歌单页 / 歌手页 / 专辑页
   - 咪咕：专辑页 / 歌手页
@@ -53,6 +53,7 @@ services:
 | 网易云 | 歌单 | `https://music.163.com/#/playlist?id=46243538` |
 | 网易云 | 专辑 | `https://music.163.com/#/album?id=xxxxx` |
 | QQ音乐 | 歌单 | `https://y.qq.com/n/ryqq_v2/playlist/7693795600` |
+| QQ音乐 | 专辑 | `https://y.qq.com/n/ryqq_v2/albumDetail/002if7UF4RpVpM` |
 | 酷狗 | 歌单 | `https://www.kugou.com/yy/special/single/12345.html` |
 | 酷狗 | 歌手 | `https://www.kugou.com/singer/12345` |
 | 酷狗 | 专辑 | `https://www.kugou.com/album/12345.html` |
