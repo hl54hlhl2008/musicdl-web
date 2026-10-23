@@ -166,6 +166,11 @@ def api_link():
         # QQ音乐专辑
         m = re.search(r'y\.qq\.com/n/ryqq[^/]*/albumDetail/([A-Za-z0-9]+)', url)
         if m: return parse_qq_album(m.group(1))
+        # QQ音乐歌手
+        m = re.search(r'y\.qq\.com/n/ryqq[^/]*/singerDetail[?/]([A-Za-z0-9]+)', url)
+        if m: return parse_qq_singer(m.group(1))
+        m = re.search(r'y\.qq\.com/n/ryqq[^/]*/singer/([A-Za-z0-9]+)', url)
+        if m: return parse_qq_singer(m.group(1))
         # 酷我歌单
         m = re.search(r'kuwo\.cn/playlist_detail/(\d+)', url)
         if m: return parse_kuwo_playlist(m.group(1))
@@ -190,6 +195,11 @@ def api_link():
         # 咪咕歌手
         m = re.search(r'singerDetail\?id=(\d+)', url)
         if m: return parse_migu_singer(m.group(1))
+        # 咪咕歌单
+        m = re.search(r'playListDetail[?&]listId=(\d+)', url)
+        if m: return parse_migu_playlist(m.group(1))
+        m = re.search(r'playlistDetail[?&]playlistId=(\d+)', url)
+        if m: return parse_migu_playlist(m.group(1))
         return jsonify({'songs': [], 'keys': [], 'error': '不支持的链接格式'})
     except Exception as e:
         return jsonify({'songs': [], 'keys': [], 'error': str(e)})
@@ -329,6 +339,29 @@ def parse_qq_album(albummid):
         keys.append(key)
 
     return jsonify({'songs': songs_out, 'keys': keys, 'folder': playlist_name})
+
+
+def parse_qq_singer(singermid):
+    """解析QQ音乐歌手：从页面获取歌手名后搜索"""
+    try:
+        r = requests.get(f"https://y.qq.com/n/ryqq/singer/{singermid}",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=10)
+        m = re.search(r'<meta\s+name="keywords"\s+content="([^",]+)', r.text)
+        singer_name = m.group(1).strip() if m else f'QQ歌手-{singermid}'
+    except:
+        singer_name = f'QQ歌手-{singermid}'
+    qq = build_client(['QQMusicClient']).music_clients['QQMusicClient']
+    results = qq.search(keyword=singer_name)
+    songs_out, keys, seen = [], [], set()
+    for si in results:
+        nid = getattr(si, 'identifier', '')
+        if nid in seen: continue
+        seen.add(nid)
+        key = f"qq_{nid}"
+        _song_cache[key] = si
+        songs_out.append({'song_name': si.song_name, 'singers': si.singers})
+        keys.append(key)
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': singer_name})
 
 
 def parse_kuwo_playlist(pid):
@@ -496,6 +529,42 @@ def parse_kugou_album(album_id):
         songs_out.append({'song_name': si.song_name, 'singers': si.singers})
         keys.append(key)
     return jsonify({'songs': songs_out, 'keys': keys, 'folder': album_name})
+
+
+def parse_migu_playlist(playlist_id):
+    """解析咪咕歌单"""
+    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://music.migu.cn/"}
+    try:
+        r_info = requests.get(f"https://app.c.nf.migu.cn/MIGUM3.0/resource/playlist/v2.0?playlistId={playlist_id}", headers=headers, timeout=15)
+        playlist_name = r_info.json().get("data", {}).get("title", f"playlist-{playlist_id}")
+    except:
+        playlist_name = f"playlist-{playlist_id}"
+    all_songs_raw, page = [], 1
+    while True:
+        r = requests.get(f"https://app.c.nf.migu.cn/MIGUM3.0/resource/playlist/song/v2.0?pageNo={page}&pageSize=50&playlistId={playlist_id}", headers=headers, timeout=15)
+        d = r.json()
+        if d.get("code") != "000000": break
+        ss = d.get("data", {}).get("songList", [])
+        total = int(d.get("data", {}).get("totalCount", 0))
+        all_songs_raw.extend(ss)
+        if len(all_songs_raw) >= total or not ss: break
+        page += 1
+    migu = build_client(['MiguMusicClient']).music_clients['MiguMusicClient']
+    songs, keys = [], []
+    for raw in all_songs_raw:
+        try:
+            singer_name_raw = raw.get('singer', '')
+            if isinstance(singer_name_raw, str) and singer_name_raw:
+                raw['singerList'] = [{'name': singer_name_raw}]
+            si = migu._parsewithofficialapiv1(search_result=raw, lossless_quality_is_sufficient=False)
+            if si.with_valid_download_url:
+                key = f"migu_{getattr(si, 'identifier', '')}"
+                _song_cache[key] = si
+                songs.append({'song_name': si.song_name, 'singers': si.singers})
+                keys.append(key)
+        except:
+            pass
+    return jsonify({'songs': songs, 'keys': keys, 'folder': playlist_name})
 
 
 def parse_migu_album(album_id):

@@ -7,10 +7,10 @@
 - **五音源搜索**：网易云、QQ音乐、酷狗、酷我、咪咕，关键词搜索歌名或歌手
 - **链接解析下载**（五平台歌单/歌手/专辑页）：
   - 网易云：歌手页 / 专辑页 / 歌单页
-  - QQ音乐：歌单页 / 专辑页
+  - QQ音乐：歌单页 / 专辑页 / 歌手页
   - 酷狗：歌单页 / 歌手页 / 专辑页
   - 酷我：歌单页 / 歌手页 / 专辑页
-  - 咪咕：专辑页 / 歌手页
+  - 咪咕：歌单页 / 专辑页 / 歌手页
 - **自动音源识别**：粘贴链接解析时自动勾选对应平台音源，取消其他平台
 - **智能目录**：解析歌手/专辑/歌单链接后，自动在下载目录下创建同名文件夹
 - **歌词同步**：每首歌自动保存同名 `.lrc` 歌词文件
@@ -54,12 +54,14 @@ services:
 | 网易云 | 专辑 | `https://music.163.com/#/album?id=xxxxx` |
 | QQ音乐 | 歌单 | `https://y.qq.com/n/ryqq_v2/playlist/7693795600` |
 | QQ音乐 | 专辑 | `https://y.qq.com/n/ryqq_v2/albumDetail/002if7UF4RpVpM` |
+| QQ音乐 | 歌手 | `https://y.qq.com/n/ryqq/singer/0025NhlN2yWrP4` |
 | 酷狗 | 歌单 | `https://www.kugou.com/yy/special/single/12345.html` |
 | 酷狗 | 歌手 | `https://www.kugou.com/singer/12345` |
 | 酷狗 | 专辑 | `https://www.kugou.com/album/12345.html` |
 | 酷我 | 歌单 | `https://www.kuwo.cn/playlist_detail/1289073215` |
 | 酷我 | 歌手 | `https://www.kuwo.cn/singer_detail/12345` |
 | 酷我 | 专辑 | `https://www.kuwo.cn/album_detail/12345` |
+| 咪咕 | 歌单 | `https://music.migu.cn/v5/#/playListDetail?listId=12345` |
 | 咪咕 | 专辑 | `https://music.migu.cn/v5/#/albumDetail?albumId=1142829638` |
 | 咪咕 | 歌手 | `https://music.migu.cn/v5/#/singerDetail?id=259` |
 
