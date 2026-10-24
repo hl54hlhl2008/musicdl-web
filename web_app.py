@@ -160,12 +160,20 @@ def api_link():
         # 网易云专辑
         m = re.search(r'music\.163\.com/#/album\?id=(\d+)', url)
         if m: return parse_netease_album(m.group(1))
+        # 网易云单曲
+        m = re.search(r'music\.163\.com/#/song\?id=(\d+)', url)
+        if m: return parse_netease_song(m.group(1))
         # QQ音乐歌单
         m = re.search(r'y\.qq\.com/n/ryqq[^/]*/playlist/(\d+)', url)
         if m: return parse_qq_playlist(m.group(1))
         # QQ音乐专辑
         m = re.search(r'y\.qq\.com/n/ryqq[^/]*/albumDetail/([A-Za-z0-9]+)', url)
         if m: return parse_qq_album(m.group(1))
+        # QQ音乐单曲
+        m = re.search(r'y\.qq\.com/n/ryqq[^/]*/songDetail/([A-Za-z0-9]+)', url)
+        if m: return parse_qq_song(m.group(1))
+        m = re.search(r'y\.qq\.com/n/ryqq[^/]*/song/([A-Za-z0-9]+)', url)
+        if m: return parse_qq_song(m.group(1))
         # QQ音乐歌手
         m = re.search(r'y\.qq\.com/n/ryqq[^/]*/singerDetail[?/]([A-Za-z0-9]+)', url)
         if m: return parse_qq_singer(m.group(1))
@@ -174,6 +182,9 @@ def api_link():
         # 酷我歌单
         m = re.search(r'kuwo\.cn/playlist_detail/(\d+)', url)
         if m: return parse_kuwo_playlist(m.group(1))
+        # 酷我单曲
+        m = re.search(r'kuwo\.cn/(?:song|play)_detail/(\d+)', url)
+        if m: return parse_kuwo_song(m.group(1))
         # 酷我歌手
         m = re.search(r'kuwo\.cn/singer_detail/(\d+)', url)
         if m: return parse_kuwo_singer(m.group(1))
@@ -183,12 +194,18 @@ def api_link():
         # 酷狗歌单
         m = re.search(r'kugou\.com/yy/special/single/(\d+)', url)
         if m: return parse_kugou_playlist(m.group(1))
+        # 酷狗单曲
+        m = re.search(r'kugou\.com/song/([A-Za-z0-9]+)', url)
+        if m: return parse_kugou_song(m.group(1))
         # 酷狗歌手
         m = re.search(r'kugou\.com/singer/(\d+)', url)
         if m: return parse_kugou_singer(m.group(1))
         # 酷狗专辑
         m = re.search(r'kugou\.com/album/(\d+)', url)
         if m: return parse_kugou_album(m.group(1))
+        # 咪咕单曲
+        m = re.search(r'(?:songDetail|play)[?&]cId=(\d+)', url)
+        if m: return parse_migu_song(m.group(1))
         # 咪咕专辑
         m = re.search(r'albumId=(\d+)', url)
         if m: return parse_migu_album(m.group(1))
@@ -339,6 +356,73 @@ def parse_qq_album(albummid):
         keys.append(key)
 
     return jsonify({'songs': songs_out, 'keys': keys, 'folder': playlist_name})
+
+
+def parse_netease_song(song_id):
+    """解析网易云单曲"""
+    ne = build_client(['NeteaseMusicClient']).music_clients['NeteaseMusicClient']
+    si = ne._parsewiththirdpartapis(search_result={'id': int(song_id)}, request_overrides={})
+    if not si.with_valid_download_url:
+        return jsonify({'songs': [], 'keys': [], 'error': '无法获取该歌曲下载链接'})
+    key = f"netease_{getattr(si, 'identifier', song_id)}"
+    _song_cache[key] = si
+    return jsonify({'songs': [{'song_name': si.song_name, 'singers': si.singers}], 'keys': [key], 'folder': si.singers or '单曲'})
+
+
+def parse_qq_song(songmid):
+    """解析QQ音乐单曲"""
+    qq = build_client(['QQMusicClient']).music_clients['QQMusicClient']
+    si = qq._parsewiththirdpartapis(search_result={'songmid': songmid}, request_overrides={})
+    if not si.with_valid_download_url:
+        return jsonify({'songs': [], 'keys': [], 'error': '无法获取该歌曲下载链接'})
+    key = f"qq_{getattr(si, 'identifier', songmid)}"
+    _song_cache[key] = si
+    return jsonify({'songs': [{'song_name': si.song_name, 'singers': si.singers}], 'keys': [key], 'folder': si.singers or '单曲'})
+
+
+def parse_kuwo_song(rid):
+    """解析酷我单曲"""
+    kw = build_client(['KuwoMusicClient']).music_clients['KuwoMusicClient']
+    si = kw._parsewiththirdpartapis(search_result={'rid': int(rid), 'musicrid': f'MUSIC_{rid}'}, request_overrides={})
+    if not si.with_valid_download_url:
+        return jsonify({'songs': [], 'keys': [], 'error': '无法获取该歌曲下载链接'})
+    if not si.song_name or si.song_name == 'NULL':
+        si.song_name = f'歌曲{rid}'
+    if not si.singers or si.singers == 'NULL':
+        si.singers = ''
+    key = f"kuwo_{rid}"
+    _song_cache[key] = si
+    return jsonify({'songs': [{'song_name': si.song_name, 'singers': si.singers}], 'keys': [key], 'folder': si.singers or '单曲'})
+
+
+def parse_kugou_song(file_hash):
+    """解析酷狗单曲"""
+    kg = build_client(['KugouMusicClient']).music_clients['KugouMusicClient']
+    si = kg._parsewiththirdpartapis(search_result={'hash': file_hash}, request_overrides={})
+    if not si.with_valid_download_url:
+        return jsonify({'songs': [], 'keys': [], 'error': '无法获取该歌曲下载链接'})
+    key = f"kugou_{getattr(si, 'identifier', file_hash)}"
+    _song_cache[key] = si
+    return jsonify({'songs': [{'song_name': si.song_name, 'singers': si.singers}], 'keys': [key], 'folder': si.singers or '单曲'})
+
+
+def parse_migu_song(content_id):
+    """解析咪咕单曲"""
+    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://music.migu.cn/"}
+    r = requests.get(f"https://app.c.nf.migu.cn/MIGUM3.0/v1.0/content/resourceinfo.do?resourceId={content_id}&resourceType=2", headers=headers, timeout=15)
+    rc = r.json().get('resource', [])
+    if not rc:
+        return jsonify({'songs': [], 'keys': [], 'error': '无法获取该歌曲信息'})
+    raw = rc[0]
+    if raw.get('singer') and not raw.get('singerList'):
+        raw['singerList'] = [{'name': raw['singer']}]
+    migu = build_client(['MiguMusicClient']).music_clients['MiguMusicClient']
+    si = migu._parsewithofficialapiv1(search_result=raw, lossless_quality_is_sufficient=False)
+    if not si.with_valid_download_url:
+        return jsonify({'songs': [], 'keys': [], 'error': '无法获取该歌曲下载链接'})
+    key = f"migu_{getattr(si, 'identifier', content_id)}"
+    _song_cache[key] = si
+    return jsonify({'songs': [{'song_name': si.song_name, 'singers': si.singers}], 'keys': [key], 'folder': si.singers or '单曲'})
 
 
 def parse_qq_singer(singermid):

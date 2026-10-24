@@ -5,12 +5,12 @@
 ## 功能
 
 - **五音源搜索**：网易云、QQ音乐、酷狗、酷我、咪咕，关键词搜索歌名或歌手
-- **链接解析下载**（五平台歌单/歌手/专辑页）：
-  - 网易云：歌手页 / 专辑页 / 歌单页
-  - QQ音乐：歌单页 / 专辑页 / 歌手页
-  - 酷狗：歌单页 / 歌手页 / 专辑页
-  - 酷我：歌单页 / 歌手页 / 专辑页
-  - 咪咕：歌单页 / 专辑页 / 歌手页
+- **链接解析下载**（五平台单曲/歌单/歌手/专辑页）：
+  - 网易云：单曲 / 歌手 / 专辑 / 歌单
+  - QQ音乐：单曲 / 歌单 / 专辑 / 歌手
+  - 酷狗：单曲 / 歌单 / 歌手 / 专辑
+  - 酷我：单曲 / 歌单 / 歌手 / 专辑
+  - 咪咕：单曲 / 歌单 / 专辑 / 歌手
 - **自动音源识别**：粘贴链接解析时自动勾选对应平台音源，取消其他平台
 - **智能目录**：解析歌手/专辑/歌单链接后，自动在下载目录下创建同名文件夹
 - **歌词同步**：每首歌自动保存同名 `.lrc` 歌词文件
@@ -49,18 +49,23 @@ services:
 
 | 平台 | 类型 | 链接示例 |
 |------|------|---------|
+| 网易云 | 单曲 | `https://music.163.com/#/song?id=347230` |
 | 网易云 | 歌手 | `https://music.163.com/#/artist?id=46487` |
 | 网易云 | 歌单 | `https://music.163.com/#/playlist?id=46243538` |
 | 网易云 | 专辑 | `https://music.163.com/#/album?id=xxxxx` |
+| QQ音乐 | 单曲 | `https://y.qq.com/n/ryqq_v2/songDetail/001bcXOd2RQ8QF` |
 | QQ音乐 | 歌单 | `https://y.qq.com/n/ryqq_v2/playlist/7693795600` |
 | QQ音乐 | 专辑 | `https://y.qq.com/n/ryqq_v2/albumDetail/002if7UF4RpVpM` |
 | QQ音乐 | 歌手 | `https://y.qq.com/n/ryqq/singer/0025NhlN2yWrP4` |
+| 酷狗 | 单曲 | `https://www.kugou.com/song/688857974673645CE89EDA26A36DB19D.html` |
 | 酷狗 | 歌单 | `https://www.kugou.com/yy/special/single/12345.html` |
 | 酷狗 | 歌手 | `https://www.kugou.com/singer/12345` |
 | 酷狗 | 专辑 | `https://www.kugou.com/album/12345.html` |
+| 酷我 | 单曲 | `https://www.kuwo.cn/song_detail/6489512` |
 | 酷我 | 歌单 | `https://www.kuwo.cn/playlist_detail/1289073215` |
 | 酷我 | 歌手 | `https://www.kuwo.cn/singer_detail/12345` |
 | 酷我 | 专辑 | `https://www.kuwo.cn/album_detail/12345` |
+| 咪咕 | 单曲 | `https://music.migu.cn/v5/#/songDetail?cId=600913000009337537` |
 | 咪咕 | 歌单 | `https://music.migu.cn/v5/#/playListDetail?listId=12345` |
 | 咪咕 | 专辑 | `https://music.migu.cn/v5/#/albumDetail?albumId=1142829638` |
 | 咪咕 | 歌手 | `https://music.migu.cn/v5/#/singerDetail?id=259` |
