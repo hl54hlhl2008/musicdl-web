@@ -425,25 +425,49 @@ def parse_migu_song(content_id):
     return jsonify({'songs': [{'song_name': si.song_name, 'singers': si.singers}], 'keys': [key], 'folder': si.singers or '单曲'})
 
 
+def _extract_qq_initial_data(text):
+    """从QQ页面提取 __INITIAL_DATA__ 伪 JSON 并转成 dict（处理 undefined/NaN/Infinity）"""
+    i = text.find('__INITIAL_DATA__ =')
+    if i < 0:
+        return None
+    start = text.find('{', i)
+    end = text.find('</script>', start)
+    if start < 0 or end < 0:
+        return None
+    seg = text[start:end]
+    seg = re.sub(r'\b(?:undefined|NaN|Infinity)\b', 'null', seg)
+    try:
+        return json.loads(seg)
+    except Exception:
+        return None
+
+
 def parse_qq_singer(singermid):
-    """解析QQ音乐歌手：从页面获取歌手名后搜索"""
+    """解析QQ音乐歌手：从页面 __INITIAL_DATA__ 提取 songList，不再依赖失效的搜索接口"""
+    singer_name = f'QQ歌手-{singermid}'
     try:
         r = requests.get(f"https://y.qq.com/n/ryqq/singer/{singermid}",
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=10)
-        m = re.search(r'<meta\s+name="keywords"\s+content="([^",]+)', r.text)
-        singer_name = m.group(1).strip() if m else f'QQ歌手-{singermid}'
-    except:
-        singer_name = f'QQ歌手-{singermid}'
-    qq = build_client(['QQMusicClient']).music_clients['QQMusicClient']
-    results = qq.search(keyword=singer_name)
-    songs_out, keys, seen = [], [], set()
-    for si in results:
-        nid = getattr(si, 'identifier', '')
-        if nid in seen: continue
-        seen.add(nid)
-        key = f"qq_{nid}"
-        _song_cache[key] = si
-        songs_out.append({'song_name': si.song_name, 'singers': si.singers})
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=12)
+        data = _extract_qq_initial_data(r.text)
+    except Exception:
+        data = None
+    if not data:
+        return jsonify({'songs': [], 'keys': [], 'error': '无法获取歌手歌曲列表'})
+    songlist = data.get('songList') or []
+    basic = data.get('singerDetail', {}).get('basic_info', {})
+    if basic.get('name'):
+        singer_name = basic['name']
+    songs_out, keys = [], []
+    for s in songlist:
+        mid = s.get('mid', '')
+        name = s.get('name') or s.get('title') or ''
+        if not mid or not name:
+            continue
+        sg = s.get('singer')
+        singers = ','.join([x.get('name', '') for x in sg]) if isinstance(sg, list) else (sg.get('name', '') if isinstance(sg, dict) else '')
+        key = f"qq_{mid}"
+        _song_cache[key] = {'songmid': mid, 'pending': True, 'source': 'QQMusicClient'}
+        songs_out.append({'song_name': name, 'singers': singers})
         keys.append(key)
     return jsonify({'songs': songs_out, 'keys': keys, 'folder': singer_name})
 
