@@ -248,23 +248,69 @@ def parse_netease_playlist(playlist_id):
 
 
 def parse_netease_artist(artist_id):
-    """解析网易云歌手：获取歌手名后搜索"""
+    """解析网易云歌手：调用官方歌手歌曲接口分页抓全量，按歌曲ID+歌名去重，下载时用歌曲ID直解析"""
     headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://music.163.com/"}
-    r = requests.get(f"https://music.163.com/api/artist/{artist_id}", headers=headers, timeout=15)
-    d = r.json()
-    artist_name = d.get("artist", {}).get("name", f"artist-{artist_id}")
-    ne = build_client(['NeteaseMusicClient']).music_clients['NeteaseMusicClient']
-    results = ne.search(keyword=artist_name)
-    songs_out, keys, seen = [], [], set()
-    for si in results:
-        nid = getattr(si, 'identifier', '')
-        if nid in seen: continue
-        seen.add(nid)
-        key = f"netease_{nid}"
-        _song_cache[key] = si
-        songs_out.append({'song_name': si.song_name, 'singers': si.singers})
+    artist_name = f"artist-{artist_id}"
+    try:
+        r = requests.get(f"https://music.163.com/api/artist/{artist_id}", headers=headers, timeout=15)
+        artist_name = r.json().get("artist", {}).get("name", artist_name)
+    except Exception:
+        pass
+
+    raw_songs, seen_ids = [], set()
+    total = 0
+    try:
+        offset = 0
+        while offset < 3000:
+            r = requests.get(
+                f"https://music.163.com/api/v1/artist/songs?id={artist_id}&offset={offset}&limit=100&order=time",
+                headers=headers, timeout=15)
+            d = r.json()
+            songs = d.get("songs") or []
+            total = d.get("total") or total
+            for s in songs:
+                sid = s.get("id")
+                if not sid or sid in seen_ids:
+                    continue
+                seen_ids.add(sid)
+                raw_songs.append(s)
+            if not d.get("more") or not songs:
+                break
+            offset += len(songs)
+    except Exception:
+        pass
+
+    # 按歌名主标题归并（去掉 (Live)/（现场版）等后缀），同名只保留最“干净”的版本
+    def _base_title(n):
+        n = re.sub(r'\s*[\(\（].*$', '', n).strip()
+        n = re.sub(r'\s*[-–—].*$', '', n).strip()
+        return n or n
+
+    groups, order = {}, []
+    for s in raw_songs:
+        name = (s.get("name") or "").strip()
+        if not name:
+            continue
+        bk = _base_title(name).lower()
+        if bk not in groups:
+            groups[bk] = []
+            order.append(bk)
+        groups[bk].append((name, s))
+
+    songs_out, keys = [], []
+    for bk in order:
+        items = groups[bk]
+        # 优先选不带括号后缀的原版，其次选标题最短的
+        items.sort(key=lambda it: (1 if re.search(r'[\(\（]', it[0]) else 0, len(it[0])))
+        name, s = items[0]
+        sid = str(s.get("id"))
+        key = f"netease_sid_{sid}"
+        _song_cache[key] = {'song_id': sid, 'pending': True, 'source': 'NeteaseMusicClient',
+                            'name': name, 'artists': artist_name}
+        songs_out.append({'song_name': name, 'singers': artist_name})
         keys.append(key)
-    return jsonify({'songs': songs_out, 'keys': keys, 'folder': artist_name})
+
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': artist_name, 'total': total})
 
 
 def parse_netease_album(album_id):
