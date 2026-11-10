@@ -108,7 +108,7 @@ function doLink(){const url=document.getElementById('link_url').value.trim();if(
   else if(url.includes('kuwo.cn')) active='src_kuwo';
   else if(url.includes('migu.cn')) active='src_migu';
   all.forEach(id=>{document.getElementById(id).checked=(id===active);});
-  log('解析链接中...');fetch('/api/link?url='+encodeURIComponent(url)).then(r=>r.json()).then(d=>{songs=d.songs||[];songKeys=d.keys||[];currentFolder=d.folder||'';document.getElementById('folder_label').textContent=currentFolder?' → '+currentFolder:'';render();log('找到 '+songs.length+' 首'+(currentFolder?'，保存到: '+currentFolder:''));});}
+  log('解析链接中...');fetch('/api/link?url='+encodeURIComponent(url)).then(r=>r.json()).then(d=>{songs=d.songs||[];songKeys=d.keys||[];currentFolder=d.folder||'';document.getElementById('folder_label').textContent=currentFolder?' → '+currentFolder:'';render();log('找到 '+songs.length+' 首'+(currentFolder?'，保存到: '+currentFolder:''));if(d.error)log('<span style="color:#c00">⚠ '+d.error+'</span>');});}
 function render(){const el=document.getElementById('songList');if(!songs.length){el.innerHTML='<p class="empty">无结果</p>';return;}el.innerHTML=songs.map((s,i)=>`<div class="song-item"><input type="checkbox" id="ck${i}"><span class="song-name">${s.song_name||''}</span><span class="song-artist">${s.singers||''}</span></div>`).join('');}
 function selectAll(v){songs.forEach((_,i)=>document.getElementById('ck'+i).checked=v);}
 function doDownload(){const selIdx=songs.map((_,i)=>i).filter(i=>document.getElementById('ck'+i).checked);if(!selIdx.length){alert('请先勾选歌曲');return;}const selKeys=selIdx.map(i=>songKeys[i]).filter(k=>k);log('开始下载 '+selKeys.length+' 首...'+(currentFolder?' → '+currentFolder:''));fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys:selKeys,folder:currentFolder})}).then(r=>r.json()).then(d=>log(d.msg||'完成'));}
@@ -249,23 +249,41 @@ def parse_netease_playlist(playlist_id):
 
 def parse_netease_artist(artist_id):
     """解析网易云歌手：调用官方歌手歌曲接口分页抓全量，按歌曲ID+歌名去重，下载时用歌曲ID直解析"""
-    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://music.163.com/"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://music.163.com/",
+        # 绕过网易云对海外/数据中心 IP 的校验，伪装成国内 IP
+        "X-Real-IP": "118.88.88.88",
+    }
     artist_name = f"artist-{artist_id}"
+    last_err = None
+
+    def _get_json(url):
+        r = requests.get(url, headers=headers, timeout=15)
+        try:
+            return r.json(), None
+        except Exception:
+            return None, f"HTTP {r.status_code}, 非JSON响应(可能被风控)"
+
     try:
-        r = requests.get(f"https://music.163.com/api/artist/{artist_id}", headers=headers, timeout=15)
-        artist_name = r.json().get("artist", {}).get("name", artist_name)
-    except Exception:
-        pass
+        d, err = _get_json(f"https://music.163.com/api/artist/{artist_id}")
+        if d:
+            artist_name = d.get("artist", {}).get("name", artist_name)
+        else:
+            last_err = err
+    except Exception as e:
+        last_err = str(e)
 
     raw_songs, seen_ids = [], set()
     total = 0
     try:
         offset = 0
         while offset < 3000:
-            r = requests.get(
-                f"https://music.163.com/api/v1/artist/songs?id={artist_id}&offset={offset}&limit=100&order=time",
-                headers=headers, timeout=15)
-            d = r.json()
+            d, err = _get_json(
+                f"https://music.163.com/api/v1/artist/songs?id={artist_id}&offset={offset}&limit=100&order=time")
+            if d is None:
+                last_err = err
+                break
             songs = d.get("songs") or []
             total = d.get("total") or total
             for s in songs:
@@ -277,8 +295,22 @@ def parse_netease_artist(artist_id):
             if not d.get("more") or not songs:
                 break
             offset += len(songs)
-    except Exception:
-        pass
+    except Exception as e:
+        last_err = str(e)
+
+    # 兜底：全量接口拿不到，退回热门 50 首
+    if not raw_songs:
+        try:
+            d, _ = _get_json(f"https://music.163.com/api/artist/{artist_id}")
+            if d and d.get("hotSongs"):
+                for s in d["hotSongs"]:
+                    sid = s.get("id")
+                    if sid and sid not in seen_ids:
+                        seen_ids.add(sid)
+                        raw_songs.append(s)
+                total = total or len(raw_songs)
+        except Exception:
+            pass
 
     # 按歌名主标题归并（去掉 (Live)/（现场版）等后缀），同名只保留最“干净”的版本
     def _base_title(n):
@@ -310,7 +342,8 @@ def parse_netease_artist(artist_id):
         songs_out.append({'song_name': name, 'singers': artist_name})
         keys.append(key)
 
-    return jsonify({'songs': songs_out, 'keys': keys, 'folder': artist_name, 'total': total})
+    return jsonify({'songs': songs_out, 'keys': keys, 'folder': artist_name, 'total': total,
+                    'error': last_err if not songs_out else None})
 
 
 def parse_netease_album(album_id):
